@@ -67,6 +67,17 @@ def make_planner_node(llm: LLM, tools: Sequence[BaseTool]) -> Callable[[AgentSta
     system = SYSTEM_PROMPT.format(tools=tool_list, max_steps=MAX_STEPS)
 
     def planner(state: AgentState) -> dict:
+        if state["plan"]:  # a predefined plan was supplied (e.g. Job Research)
+            entry = trace_entry(
+                agent="planner",
+                input=state["task"],
+                output="Using predefined plan:\n" + "\n".join(f"{i}. {s}" for i, s in enumerate(state["plan"], 1)),
+                provider="-",
+                model="-",
+                latency_ms=0,
+            )
+            return {"current_step": 0, "step_results": [], "trace": [entry]}
+
         start = time.perf_counter()
         messages: list[BaseMessage] = [SystemMessage(system), HumanMessage(f"Task: {state['task']}")]
         tokens_in = tokens_out = 0

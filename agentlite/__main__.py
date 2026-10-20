@@ -4,6 +4,10 @@
     python -m agentlite --model qwen2.5:7b "your task"
     python -m agentlite --list-models
     python -m agentlite --json "your task"      # full final state incl. trace
+
+Job Research mode (writes workspace/job_report.md; never submits anything):
+    python -m agentlite --job-url https://example.com/job --resume docs/resume.pdf
+    python -m agentlite --job-file examples/sample_job_posting.txt --resume docs/sample_resume.md
 """
 
 from __future__ import annotations
@@ -12,9 +16,12 @@ import argparse
 import json
 import logging
 import sys
+from pathlib import Path
 
 from agentlite.config import get_settings
+from agentlite.documents import load_text
 from agentlite.graph import run_task
+from agentlite.jobs import build_job_research, save_report
 from agentlite.llm import LLM, RECOMMENDED_OLLAMA_MODELS, LLMError, available_models, check_ollama_model
 from agentlite.state import TraceEntry
 
@@ -47,6 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--list-models", action="store_true", help="Show models available per provider.")
     parser.add_argument("--json", action="store_true", help="Print the final state (with full trace) as JSON.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Show every LLM and tool call.")
+    job = parser.add_argument_group("Job Research mode")
+    job.add_argument("--job-url", help="URL of a job posting.")
+    job.add_argument("--job-file", type=Path, help="Text file containing a pasted job posting.")
+    job.add_argument("--resume", type=Path, help="Resume (.pdf/.md/.txt). If omitted, uses knowledge_search over ./docs.")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="  [%(name)s] %(message)s")
@@ -61,7 +72,19 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  {model}{tag}")
         return 0
 
-    if not args.task:
+    plan: list[str] | None = None
+    job_mode = bool(args.job_url or args.job_file)
+    if job_mode:
+        try:
+            research = build_job_research(
+                posting_url=args.job_url,
+                posting_text=load_text(args.job_file) if args.job_file else None,
+                resume_path=args.resume,
+            )
+        except (ValueError, OSError) as exc:
+            parser.error(str(exc))
+        args.task, plan = research.task, research.plan
+    elif not args.task:
         parser.error('give a task, e.g. python -m agentlite "What is LangGraph?"')
 
     try:
@@ -73,16 +96,18 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.json:
-        state = run_task(args.task, llm)
+        state = run_task(args.task, llm, plan=plan)
         print(json.dumps(state, indent=2, ensure_ascii=False))
         return 0
 
     print(f"Running with {llm.provider}/{llm.model}")
-    state = run_task(args.task, llm, on_trace=print_entry)
+    state = run_task(args.task, llm, on_trace=print_entry, plan=plan)
     total_ms = sum(e["latency_ms"] for e in state["trace"])
     print("\n=================== FINAL ANSWER ===================")
     print(state["final_answer"])
     print(f"\n[{len(state['plan'])} steps, {state['retries']} retries, {total_ms / 1000:.1f}s]")
+    if job_mode:
+        print(f"Report saved to {save_report(state['final_answer'])}")
     return 0
 
 

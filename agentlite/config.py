@@ -23,6 +23,11 @@ load_dotenv(PROJECT_ROOT / ".env")
 MAX_NUM_CTX = 8192
 
 
+def _path(env_var: str, default: Path) -> Path:
+    value = os.getenv(env_var)
+    return Path(value).resolve() if value else default
+
+
 @dataclass(frozen=True)
 class Settings:
     provider: str
@@ -31,6 +36,19 @@ class Settings:
     ollama_base_url: str
     ollama_num_ctx: int
     request_timeout_s: float
+    embed_model: str
+    # Folders. Overridable so Docker can mount volumes elsewhere.
+    data_dir: Path        # Chroma index, demo DB, run history (git-ignored)
+    docs_dir: Path        # files to index for knowledge_search
+    workspace_dir: Path   # the only folder file tools may touch
+
+    @property
+    def chroma_dir(self) -> Path:
+        return self.data_dir / "chroma"
+
+    @property
+    def demo_db_path(self) -> Path:
+        return self.data_dir / "demo.db"
 
 
 @lru_cache(maxsize=1)
@@ -44,4 +62,8 @@ def get_settings() -> Settings:
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         ollama_num_ctx=min(int(os.getenv("OLLAMA_NUM_CTX", str(MAX_NUM_CTX))), MAX_NUM_CTX),
         request_timeout_s=float(os.getenv("LLM_TIMEOUT_S", "120")),
+        embed_model=os.getenv("EMBED_MODEL", "nomic-embed-text"),
+        data_dir=_path("DATA_DIR", PROJECT_ROOT / "data"),
+        docs_dir=_path("DOCS_DIR", PROJECT_ROOT / "docs"),
+        workspace_dir=_path("WORKSPACE_DIR", PROJECT_ROOT / "workspace"),
     )

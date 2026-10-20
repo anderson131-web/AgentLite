@@ -10,6 +10,11 @@ __pycache__/
 # Runtime data (vector store, SQLite traces)
 data/
 
+# Your own documents (resume etc.) stay private; only samples are committed
+docs/*
+!docs/.gitkeep
+!docs/sample_*
+
 # Agent sandbox: keep the folder, not its contents
 workspace/*
 !workspace/.gitkeep

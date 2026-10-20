@@ -75,14 +75,18 @@ def build_graph(llm: LLM, tools: Sequence[BaseTool] | None = None):
 
 
 def stream_run(
-    task: str, llm: LLM, tools: Sequence[BaseTool] | None = None
+    task: str,
+    llm: LLM,
+    tools: Sequence[BaseTool] | None = None,
+    plan: list[str] | None = None,
 ) -> Iterator[tuple[str, Any]]:
     """Yield ("trace", TraceEntry) as each node finishes, then ("done", AgentState).
 
     The CLI prints entries live; the API (Phase 4) forwards them over SSE.
+    Pass `plan` to skip the LLM planner.
     """
     app = build_graph(llm, tools)
-    state: dict[str, Any] = dict(initial_state(task))
+    state: dict[str, Any] = dict(initial_state(task, plan))
     for update in app.stream(state, {"recursion_limit": RECURSION_LIMIT}, stream_mode="updates"):
         for node_update in update.values():
             for entry in node_update.get("trace", []):
@@ -98,9 +102,10 @@ def run_task(
     llm: LLM,
     tools: Sequence[BaseTool] | None = None,
     on_trace: Callable[[TraceEntry], None] | None = None,
+    plan: list[str] | None = None,
 ) -> AgentState:
     """Run the whole graph and return the final state."""
-    for kind, payload in stream_run(task, llm, tools):
+    for kind, payload in stream_run(task, llm, tools, plan):
         if kind == "trace" and on_trace:
             on_trace(payload)
         elif kind == "done":

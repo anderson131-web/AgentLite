@@ -49,10 +49,11 @@ class AgentState(TypedDict):
     retries: int                 # how many times the reviewer sent work back
 
 
-def initial_state(task: str) -> AgentState:
+def initial_state(task: str, plan: list[str] | None = None) -> AgentState:
+    """A fresh state. Pass `plan` to skip the LLM planner (used by Job Research)."""
     return AgentState(
         task=task,
-        plan=[],
+        plan=list(plan or []),
         current_step=0,
         step_results=[],
         review=None,

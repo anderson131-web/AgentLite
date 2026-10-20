@@ -1,0 +1,27 @@
+SAMPLE JOB POSTING (fictional, for testing AgentLite)
+
+Junior Machine Learning Engineer — Hugging Face–style open-source AI startup "OpenWeights Labs"
+Location: Remote (Canada / US)
+
+About us
+OpenWeights Labs builds open-source tools that help developers run and evaluate language models on their own hardware.
+
+What you'll do
+- Build Python services and APIs that serve and evaluate LLMs
+- Create evaluation pipelines that compare models on quality, latency, and cost
+- Work on retrieval-augmented generation (RAG) features
+- Ship containerized services to Kubernetes in the cloud
+- Write clear documentation and tests
+
+Required
+- Python and SQL
+- Experience with PyTorch or another deep learning framework
+- REST API development (FastAPI preferred)
+- Docker
+- Experience with LLM frameworks such as LangChain or LlamaIndex
+
+Nice to have
+- Kubernetes
+- Experience with vector databases (ChromaDB, Pinecone, or similar)
+- CUDA or GPU performance tuning
+- Contributions to open-source projects

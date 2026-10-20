@@ -32,6 +32,15 @@ def tool_call(name: str, **args) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call_{name}", "type": "tool_call"}])
 
 
-@pytest.fixture
-def fake_llm_factory():
-    return FakeLLM
+@pytest.fixture(autouse=True)
+def isolated_dirs(tmp_path, monkeypatch):
+    """Point workspace/data/docs at a temp folder so tests never touch real files."""
+    from agentlite.config import get_settings
+
+    for name in ("WORKSPACE_DIR", "DATA_DIR", "DOCS_DIR"):
+        folder = tmp_path / name.lower()
+        folder.mkdir()
+        monkeypatch.setenv(name, str(folder))
+    get_settings.cache_clear()
+    yield tmp_path
+    get_settings.cache_clear()
