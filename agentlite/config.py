@@ -50,6 +50,10 @@ class Settings:
     def demo_db_path(self) -> Path:
         return self.data_dir / "demo.db"
 
+    @property
+    def runs_db_path(self) -> Path:
+        return self.data_dir / "runs.db"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

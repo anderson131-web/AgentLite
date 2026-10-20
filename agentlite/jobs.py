@@ -37,16 +37,22 @@ def build_job_research(
     posting_text: str | None = None,
     resume_text: str | None = None,
     resume_path: Path | None = None,
+    folder: str = "",
 ) -> JobResearch:
-    """Stage the inputs in the workspace and return the task plus its fixed plan."""
+    """Stage the inputs in the workspace and return the task plus its fixed plan.
+
+    `folder` is a workspace subfolder for the input files (the API uses one per run).
+    """
     if not posting_url and not posting_text:
         raise ValueError("Give a job posting URL or the posting text.")
-    workspace = get_settings().workspace_dir
-    workspace.mkdir(parents=True, exist_ok=True)
+    target = get_settings().workspace_dir / folder
+    target.mkdir(parents=True, exist_ok=True)
+    job_file = f"{folder}/{JOB_FILE}" if folder else JOB_FILE
+    resume_file = f"{folder}/{RESUME_FILE}" if folder else RESUME_FILE
 
     if posting_text:
-        (workspace / JOB_FILE).write_text(posting_text.strip(), encoding="utf-8")
-        read_posting = f'Use read_file with path "{JOB_FILE}" to read the job posting.'
+        (target / JOB_FILE).write_text(posting_text.strip(), encoding="utf-8")
+        read_posting = f'Use read_file with path "{job_file}" to read the job posting.'
         source = "the job posting saved in the workspace"
     else:
         read_posting = f'Use fetch_page with url "{posting_url}" to read the job posting.'
@@ -55,8 +61,8 @@ def build_job_research(
     if resume_path is not None:
         resume_text = load_text(resume_path)
     if resume_text:
-        (workspace / RESUME_FILE).write_text(resume_text.strip(), encoding="utf-8")
-        read_resume = f'Use read_file with path "{RESUME_FILE}" to read the resume.'
+        (target / RESUME_FILE).write_text(resume_text.strip(), encoding="utf-8")
+        read_resume = f'Use read_file with path "{resume_file}" to read the resume.'
     else:
         read_resume = 'Use knowledge_search with query "resume skills experience education" to find the resume.'
 

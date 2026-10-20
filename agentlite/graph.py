@@ -80,7 +80,8 @@ def stream_run(
     tools: Sequence[BaseTool] | None = None,
     plan: list[str] | None = None,
 ) -> Iterator[tuple[str, Any]]:
-    """Yield ("trace", TraceEntry) as each node finishes, then ("done", AgentState).
+    """Yield ("trace", TraceEntry) as each node finishes, ("plan", list[str]) whenever
+    the plan changes, and finally ("done", AgentState).
 
     The CLI prints entries live; the API (Phase 4) forwards them over SSE.
     Pass `plan` to skip the LLM planner.
@@ -89,6 +90,8 @@ def stream_run(
     state: dict[str, Any] = dict(initial_state(task, plan))
     for update in app.stream(state, {"recursion_limit": RECURSION_LIMIT}, stream_mode="updates"):
         for node_update in update.values():
+            if "plan" in node_update:
+                yield "plan", node_update["plan"]
             for entry in node_update.get("trace", []):
                 yield "trace", entry
             # Mirror LangGraph's merge (trace appends, everything else replaces).

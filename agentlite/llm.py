@@ -148,5 +148,5 @@ def check_ollama_model(model: str, base_url: str | None = None) -> None:
 
 
 def available_models() -> dict[str, list[str]]:
-    """Models per enabled provider. Used by the CLI now and the API's GET /models later."""
-    return {"ollama": list_ollama_models()}
+    """Chat models per enabled provider (embedding models are left out)."""
+    return {"ollama": [m for m in list_ollama_models() if "embed" not in m]}
