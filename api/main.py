@@ -143,6 +143,15 @@ def ingest() -> dict[str, int]:
         raise HTTPException(500, f"Ingest failed: {exc}") from exc
 
 
+@api.get("/evals/latest")
+def latest_evals() -> dict:
+    """The most recent benchmark report written by `python -m evals.run_evals`."""
+    path = PROJECT_ROOT / "evals" / "results" / "latest.json"
+    if not path.is_file():
+        raise HTTPException(404, "No eval results yet")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @api.post("/uploads/resume", response_model=ResumeUploadResponse)
 async def upload_resume(file: UploadFile) -> ResumeUploadResponse:
     """Extract text from an uploaded resume (.pdf/.md/.txt). The file is not kept."""

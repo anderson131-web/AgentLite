@@ -26,10 +26,10 @@ Approve if the answer addresses every part of the task and does not look made up
 Ask for a revision only for a real problem: a missing part of the task, an
 obvious error, or an empty or off-topic answer. Do not ask for style changes.
 
-Reply with JSON only:
+Reply with JSON only, in one of these two forms:
 {"verdict": "APPROVED", "feedback": ""}
-or
-{"verdict": "REVISE", "feedback": "what exactly is missing or wrong"}"""
+{"verdict": "REVISE", "feedback": "The task asked for three frameworks but the answer only names two."}
+When you choose REVISE, write your own specific feedback about THIS answer."""
 
 MAX_RETRIES = 2  # after this many REVISE rounds we finish anyway, with a note
 ANSWER_CHARS = 3000

@@ -35,6 +35,8 @@ Rules:
 - Call a tool whenever you need facts you do not already know. Call one tool at a time.
 - Base your answer on tool results. Never invent numbers, names, or URLs.
 - If a tool returns an ERROR, read it, fix your arguments, and try again or use another approach.
+- If the tools cannot do what was asked (for example, the database is read-only), say clearly that you
+  cannot do it and why. Never try to work around a safety limit or tell the user how to bypass it.
 - When you have enough information, reply with the final answer as plain text and do not call a tool."""
 
 MAX_CONSECUTIVE_TOOL_ERRORS = 3
