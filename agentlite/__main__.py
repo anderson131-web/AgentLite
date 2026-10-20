@@ -1,46 +1,68 @@
-"""Command-line entry point: python -m agentlite "your task"
+"""Command-line entry point.
 
-Phase 1: runs a single tool-calling agent with web_search.
-Phase 2 replaces this with the planner -> executor -> reviewer graph.
+    python -m agentlite "your task"
+    python -m agentlite --model qwen2.5:7b "your task"
+    python -m agentlite --list-models
+    python -m agentlite --json "your task"      # full final state incl. trace
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 
-from agentlite.agents.tool_agent import run_tool_agent
 from agentlite.config import get_settings
+from agentlite.graph import run_task
 from agentlite.llm import LLM, RECOMMENDED_OLLAMA_MODELS, LLMError, available_models, check_ollama_model
-from agentlite.tools import get_tools
+from agentlite.state import TraceEntry
+
+
+def print_entry(entry: TraceEntry) -> None:
+    """One trace entry as a compact block, printed as soon as the node finishes."""
+    tokens = ""
+    if entry["input_tokens"] or entry["output_tokens"]:
+        tokens = f", {entry['input_tokens'] or 0}/{entry['output_tokens'] or 0} tok"
+    print(f"\n--- {entry['agent'].upper()} ({entry['latency_ms']} ms{tokens}) ---")
+    if entry["agent"] == "executor":
+        step_line = next((l for l in entry["input"].splitlines() if l.startswith("Your current step")), "")
+        print(step_line)
+    for call in entry["tool_calls"]:
+        status = "ERROR" if call["error"] else "ok"
+        print(f"  tool: {call['name']}({json.dumps(call['args'])}) [{status}, {call['latency_ms']} ms]")
+    if entry["agent"] != "finalize":
+        output = entry["output"]
+        print(output if len(output) < 600 else output[:600] + " ...")
+    if entry["error"]:
+        print(f"  ! {entry['error']}")
 
 
 def main(argv: list[str] | None = None) -> int:
     settings = get_settings()
-    parser = argparse.ArgumentParser(prog="agentlite", description="Run a task with a tool-using agent.")
+    parser = argparse.ArgumentParser(prog="agentlite", description="Plan, execute, and review a task with local LLM agents.")
     parser.add_argument("task", nargs="?", help="The task to run, in quotes.")
     parser.add_argument("--provider", default=settings.provider, help=f"Default: {settings.provider}")
     parser.add_argument("--model", default=settings.model, help=f"Default: {settings.model}")
     parser.add_argument("--list-models", action="store_true", help="Show models available per provider.")
-    parser.add_argument("-q", "--quiet", action="store_true", help="Hide step-by-step progress logs.")
+    parser.add_argument("--json", action="store_true", help="Print the final state (with full trace) as JSON.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Show every LLM and tool call.")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.WARNING if args.quiet else logging.INFO, format="  [%(name)s] %(message)s")
-    # Keep third-party HTTP chatter out of the progress log.
+    logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="  [%(name)s] %(message)s")
     for noisy in ("httpx", "httpcore", "primp", "ddgs"):
         logging.getLogger(noisy).setLevel(logging.WARNING)
 
     if args.list_models:
         for provider, models in available_models().items():
             print(f"{provider}:")
-            for model in models or ["(none found - is the server running?)"]:
+            for model in models or ["(none found)"]:
                 tag = "  (recommended)" if model in RECOMMENDED_OLLAMA_MODELS else ""
                 print(f"  {model}{tag}")
         return 0
 
     if not args.task:
-        parser.error("give a task, e.g. python -m agentlite \"What is LangGraph?\"")
+        parser.error('give a task, e.g. python -m agentlite "What is LangGraph?"')
 
     try:
         if args.provider == "ollama":
@@ -50,23 +72,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"Running with {llm.provider}/{llm.model} ...\n")
-    result = run_tool_agent(args.task, llm, get_tools())
+    if args.json:
+        state = run_task(args.task, llm)
+        print(json.dumps(state, indent=2, ensure_ascii=False))
+        return 0
 
-    print("\n=== Tool calls ===")
-    for i, call in enumerate(result.tool_calls, start=1):
-        status = "ERROR" if call.error else "ok"
-        print(f"{i}. {call.name}({call.args}) [{status}, {call.latency_ms} ms]")
-    if not result.tool_calls:
-        print("(none)")
-
-    print("\n=== Answer ===")
-    print(result.answer)
-    print(
-        f"\n[{result.llm_calls} LLM calls, {result.input_tokens} in / {result.output_tokens} out tokens, "
-        f"{result.latency_ms / 1000:.1f}s total]"
-    )
-    return 1 if result.error else 0
+    print(f"Running with {llm.provider}/{llm.model}")
+    state = run_task(args.task, llm, on_trace=print_entry)
+    total_ms = sum(e["latency_ms"] for e in state["trace"])
+    print("\n=================== FINAL ANSWER ===================")
+    print(state["final_answer"])
+    print(f"\n[{len(state['plan'])} steps, {state['retries']} retries, {total_ms / 1000:.1f}s]")
+    return 0
 
 
 if __name__ == "__main__":
