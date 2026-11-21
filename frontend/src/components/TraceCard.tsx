@@ -67,7 +67,7 @@ export default function TraceCard({ entry }: { entry: TraceEntry }) {
       )}
 
       {entry.error && (
-        <p className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-800">⚠ {entry.error}</p>
+        <p className="mt-2 rounded bg-red-50 px-2 py-1 text-xs text-red-800"><span className="font-semibold">Error:</span> {entry.error}</p>
       )}
 
       {entry.agent !== "finalize" && (
