@@ -1,0 +1,27 @@
+# Runs the AgentLite app (API + frontend). Ollama stays native on Windows for GPU access.
+#
+#   docker compose up --build      then open http://localhost:8080
+#
+# If the app can't reach Ollama, make Ollama listen on all interfaces:
+#   setx OLLAMA_HOST 0.0.0.0   (then restart the Ollama app)
+services:
+  app:
+    build: .
+    image: agentlite:latest
+    ports:
+      - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      DATA_DIR: /app/data
+      DOCS_DIR: /app/docs
+      WORKSPACE_DIR: /app/workspace
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # needed on Linux; harmless on Docker Desktop
+    volumes:
+      - ./data:/app/data             # run history, vector index, demo DB survive restarts
+      - ./docs:/app/docs             # your resume and notes for knowledge_search
+      - ./workspace:/app/workspace   # files the agents read and write
+    restart: unless-stopped

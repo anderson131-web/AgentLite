@@ -1,0 +1,9 @@
+[project]
+name = "agentlite"
+version = "0.1.0"
+description = "Multi-agent task automation on small, locally hosted LLMs"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
