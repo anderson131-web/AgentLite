@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agentlite.config import PROJECT_ROOT, get_settings
 from agentlite.documents import SUPPORTED_SUFFIXES, load_text
-from agentlite.llm import LLM, SUPPORTED_PROVIDERS, LLMError, available_models, check_ollama_model
+from agentlite.llm import LLM, LLMError, available_models, check_ollama_model, enabled_providers
 from agentlite.rag import ingest_docs
 from api import runner, store
 from api.schemas import IngestResponse, ModelsResponse, ResumeUploadResponse, Run, RunCreated, RunRequest
@@ -64,8 +64,8 @@ def create_run(request: RunRequest) -> RunCreated:
     settings = get_settings()
     provider = request.provider or settings.provider
     model = request.model or settings.model
-    if provider not in SUPPORTED_PROVIDERS:
-        raise HTTPException(400, f"Provider '{provider}' is not enabled. Enabled: {list(SUPPORTED_PROVIDERS)}")
+    if provider not in enabled_providers():
+        raise HTTPException(400, f"Provider '{provider}' is not enabled. Enabled: {enabled_providers()}")
     try:
         if provider == "ollama":
             check_ollama_model(model)

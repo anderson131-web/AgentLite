@@ -3,6 +3,7 @@
     python -m evals.run_evals                                   # default local models
     python -m evals.run_evals --models ollama/qwen2.5:3b --tasks sql_top_seller
     python -m evals.run_evals --judge ollama/qwen2.5:7b
+    python -m evals.run_evals --models gemini/gemini-3.8-flash --pause 10   # stay under free-tier RPM
 
 Two phases, on purpose:
 1. RUN all tasks for one model, then the next model. Ollama keeps one model in
@@ -249,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS, help="provider/model, e.g. ollama/qwen2.5:3b")
     parser.add_argument("--tasks", nargs="+", help="Only run these task ids.")
     parser.add_argument("--judge", default=DEFAULT_JUDGE, help="provider/model used for LLM-as-judge checks.")
+    parser.add_argument("--pause", type=float, default=0, help="Seconds to wait between tasks (for rate-limited APIs).")
     args = parser.parse_args(argv)
 
     tasks = yaml.safe_load((EVALS_DIR / "tasks.yaml").read_text(encoding="utf-8"))["tasks"]
@@ -277,6 +279,8 @@ def main(argv: list[str] | None = None) -> int:
     for llm in llms:
         print(f"\n=== {llm.provider}/{llm.model}: {len(tasks)} tasks ===")
         for i, task in enumerate(tasks, start=1):
+            if i > 1 and args.pause and llm.provider != "ollama":
+                time.sleep(args.pause)
             task = dict(task)  # run_one may add the job task text
             record = run_one(task, llm)
             records.append((record, task))

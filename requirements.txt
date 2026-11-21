@@ -21,3 +21,9 @@ python-multipart>=0.0.9
 # Evals (Phase 6)
 pyyaml>=6.0
 
+
+# Optional cloud providers + BigQuery (Phases 8-9). Installed always so the
+# Docker image works anywhere; they are only used when keys are configured.
+langchain-google-genai>=2.0
+langchain-openai>=0.3
+google-cloud-bigquery>=3.25

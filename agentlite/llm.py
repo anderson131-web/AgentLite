@@ -7,9 +7,12 @@ latency). Switching from Ollama to a cloud model is then a config change, not a
 code change.
 
 Providers:
-- ollama        (default, local, no key)          <- Phase 1
-- azure_openai  (optional, needs keys in .env)     <- Phase 9
-- gemini        (optional, needs key in .env)      <- Phase 8
+- ollama        default, local, no key
+- gemini        optional, needs GOOGLE_API_KEY (Google AI Studio free tier)
+- azure_openai  optional, needs the AZURE_OPENAI_* settings (pay per token)
+
+Cloud SDKs are imported inside _build_chat_model, so an Ollama-only setup
+never needs them configured.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from langchain_ollama import ChatOllama
 
 from agentlite.config import get_settings
 
-SUPPORTED_PROVIDERS: tuple[str, ...] = ("ollama",)
+SUPPORTED_PROVIDERS: tuple[str, ...] = ("ollama", "gemini", "azure_openai")
 
 # Models this project is tuned and evaluated for. Other pulled models still work.
 RECOMMENDED_OLLAMA_MODELS: tuple[str, ...] = (
@@ -52,9 +55,8 @@ class LLMResponse:
 
     @property
     def content(self) -> str:
-        # Some providers return a list of content parts; we only care about text.
-        content = self.message.content
-        return content if isinstance(content, str) else str(content)
+        # Gemini returns a list of content blocks; .text joins the text parts for any provider.
+        return self.message.text
 
     @property
     def tool_calls(self) -> list[dict]:
@@ -101,8 +103,24 @@ class LLM:
         )
 
 
+def enabled_providers() -> list[str]:
+    """Ollama is always on; cloud providers only when their settings are present."""
+    settings = get_settings()
+    providers = ["ollama"]
+    if settings.google_api_key:
+        providers.append("gemini")
+    if settings.azure_openai_api_key and settings.azure_openai_endpoint and settings.azure_openai_deployment:
+        providers.append("azure_openai")
+    return providers
+
+
 def _build_chat_model(provider: str, model: str, temperature: float) -> BaseChatModel:
     settings = get_settings()
+    if provider not in SUPPORTED_PROVIDERS:
+        raise LLMError(f"Unknown provider '{provider}'. Supported: {', '.join(SUPPORTED_PROVIDERS)}")
+    if provider not in enabled_providers():
+        raise LLMError(f"Provider '{provider}' is not configured. Add its keys to .env (see .env.example).")
+
     if provider == "ollama":
         return ChatOllama(
             model=model,
@@ -111,8 +129,27 @@ def _build_chat_model(provider: str, model: str, temperature: float) -> BaseChat
             num_ctx=settings.ollama_num_ctx,
             client_kwargs={"timeout": settings.request_timeout_s},
         )
-    raise LLMError(
-        f"Unknown provider '{provider}'. Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+    if provider == "gemini":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        return ChatGoogleGenerativeAI(
+            model=model,
+            google_api_key=settings.google_api_key,
+            temperature=temperature,
+            timeout=settings.request_timeout_s,
+            max_retries=2,  # free-tier rate limits return 429s; retry with backoff
+        )
+    # azure_openai: "model" is the DEPLOYMENT name you chose in Azure AI Foundry.
+    from langchain_openai import AzureChatOpenAI
+
+    return AzureChatOpenAI(
+        azure_deployment=model,
+        azure_endpoint=settings.azure_openai_endpoint,
+        api_key=settings.azure_openai_api_key,
+        api_version=settings.azure_openai_api_version,
+        temperature=temperature,
+        timeout=settings.request_timeout_s,
+        max_retries=2,
     )
 
 
@@ -149,4 +186,11 @@ def check_ollama_model(model: str, base_url: str | None = None) -> None:
 
 def available_models() -> dict[str, list[str]]:
     """Chat models per enabled provider (embedding models are left out)."""
-    return {"ollama": [m for m in list_ollama_models() if "embed" not in m]}
+    settings = get_settings()
+    models: dict[str, list[str]] = {"ollama": [m for m in list_ollama_models() if "embed" not in m]}
+    if "gemini" in enabled_providers():
+        # The configured model first, plus the cheaper Flash-Lite as an option.
+        models["gemini"] = list(dict.fromkeys([settings.gemini_model, "gemini-3.5-flash-lite"]))
+    if "azure_openai" in enabled_providers():
+        models["azure_openai"] = [settings.azure_openai_deployment]
+    return {provider: names for provider, names in models.items() if names}

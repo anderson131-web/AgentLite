@@ -86,7 +86,16 @@ def run_tool_agent(
     try:
         for _ in range(max_iterations):
             response = _call(llm, messages, tools, result)
-            calls = response.tool_calls or _parse_text_tool_call(response.content, tools_by_name)
+            calls = response.tool_calls
+            if calls:
+                # Keep the model's own message: Gemini attaches "thought signatures" to
+                # tool calls and rejects the next turn if they are missing.
+                messages.append(response.message)
+            else:
+                calls = _parse_text_tool_call(response.content, tools_by_name)
+                if calls:
+                    # The call was written as text; re-wrap it as a real tool call.
+                    messages.append(AIMessage(content="", tool_calls=calls))
 
             if not calls:
                 answer = _strip_thinking(response.content)
@@ -99,8 +108,6 @@ def run_tool_agent(
                 messages.append(HumanMessage("Your reply was empty. Give the final answer as plain text."))
                 continue
 
-            # Re-wrap the calls so text-parsed calls look like real ones to the next turn.
-            messages.append(AIMessage(content="", tool_calls=calls))
             for call in calls:
                 record = _execute_tool_call(call, tools_by_name)
                 result.tool_calls.append(record)

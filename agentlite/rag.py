@@ -6,7 +6,11 @@ collection. A search embeds the query the same way and returns the nearest
 chunks.
 
 We compute embeddings ourselves (instead of letting Chroma do it) so the
-embedding model is explicit and comes from the same Ollama server as the LLM.
+embedding model is explicit: nomic-embed-text on Ollama locally, or a Gemini
+embedding model in the cloud (EMBED_PROVIDER=gemini), where there is no Ollama.
+
+Vectors from different embedding models are not comparable, so the index
+records which model built it, and search refuses to mix models.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 import chromadb
+from langchain_core.embeddings import Embeddings
 from langchain_ollama import OllamaEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -26,8 +31,8 @@ CHUNK_SIZE = 800      # characters; a resume section or a paragraph or two
 CHUNK_OVERLAP = 100   # so a sentence cut at a boundary still appears whole once
 
 # nomic-embed-text was trained with task prefixes; using them improves retrieval.
-DOC_PREFIX = "search_document: "
-QUERY_PREFIX = "search_query: "
+NOMIC_DOC_PREFIX = "search_document: "
+NOMIC_QUERY_PREFIX = "search_query: "
 
 
 @dataclass
@@ -44,9 +49,24 @@ def _client() -> chromadb.ClientAPI:
     return chromadb.PersistentClient(path=str(settings.chroma_dir))
 
 
-def _embedder() -> OllamaEmbeddings:
+def _embedder() -> Embeddings:
     settings = get_settings()
+    if settings.embed_provider == "gemini":
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
+        return GoogleGenerativeAIEmbeddings(model=settings.embed_model, google_api_key=settings.google_api_key)
     return OllamaEmbeddings(model=settings.embed_model, base_url=settings.ollama_base_url)
+
+
+def _embed_id() -> str:
+    settings = get_settings()
+    return f"{settings.embed_provider}/{settings.embed_model}"
+
+
+def _prefixes() -> tuple[str, str]:
+    if "nomic" in get_settings().embed_model:
+        return NOMIC_DOC_PREFIX, NOMIC_QUERY_PREFIX
+    return "", ""
 
 
 def ingest_docs() -> dict[str, int]:
@@ -77,9 +97,10 @@ def ingest_docs() -> dict[str, int]:
         client.delete_collection(COLLECTION)
     except Exception:  # collection didn't exist yet
         pass
-    collection = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine"})
+    collection = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine", "embed": _embed_id()})
     if texts:
-        embeddings = _embedder().embed_documents([DOC_PREFIX + t for t in texts])
+        doc_prefix, _ = _prefixes()
+        embeddings = _embedder().embed_documents([doc_prefix + t for t in texts])
         collection.add(ids=ids, documents=texts, embeddings=embeddings, metadatas=metadatas)
     return {"files": len(files), "chunks": len(texts)}
 
@@ -92,7 +113,11 @@ def search(query: str, k: int = 4) -> list[SearchHit]:
         return []
     if collection.count() == 0:
         return []
-    vector = _embedder().embed_query(QUERY_PREFIX + query)
+    built_with = (collection.metadata or {}).get("embed")
+    if built_with and built_with != _embed_id():
+        raise RuntimeError(f"index was built with {built_with} but EMBED settings are {_embed_id()}; re-run ingest")
+    _, query_prefix = _prefixes()
+    vector = _embedder().embed_query(query_prefix + query)
     result = collection.query(query_embeddings=[vector], n_results=min(k, collection.count()))
     return [
         SearchHit(source=meta["source"], text=doc, distance=dist)

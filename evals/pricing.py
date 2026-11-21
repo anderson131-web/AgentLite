@@ -10,6 +10,13 @@ from __future__ import annotations
 # key: "provider/model"; a "provider/*" entry is the fallback for that provider.
 PRICES_PER_MILLION: dict[str, tuple[float, float]] = {
     "ollama/*": (0.0, 0.0),
+    # Google's pricing page, checked 2026-10-20. 3.8 Flash doubles on 2027-01-01 ($1.50 / $7.50).
+    "gemini/gemini-3.8-flash": (0.75, 3.75),
+    "gemini/gemini-3.5-flash-lite": (0.30, 2.50),
+    # Third-party listings for gpt-4.1-nano (Microsoft's page is region-specific); verify
+    # on the Azure pricing calculator. Azure "models" are deployment names, so this
+    # fallback assumes your deployment runs gpt-4.1-nano.
+    "azure_openai/*": (0.10, 0.40),
 }
 
 

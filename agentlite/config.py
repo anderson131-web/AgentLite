@@ -36,7 +36,18 @@ class Settings:
     ollama_base_url: str
     ollama_num_ctx: int
     request_timeout_s: float
+    embed_provider: str   # ollama | gemini (the cloud has no Ollama)
     embed_model: str
+    # Optional cloud providers: enabled only when their keys are set.
+    google_api_key: str
+    gemini_model: str
+    azure_openai_api_key: str
+    azure_openai_endpoint: str
+    azure_openai_deployment: str
+    azure_openai_api_version: str
+    # Optional BigQuery tool: enabled only when a GCP project is set.
+    gcp_project: str
+    bigquery_max_bytes: int
     # Folders. Overridable so Docker can mount volumes elsewhere.
     data_dir: Path        # Chroma index, demo DB, run history (git-ignored)
     docs_dir: Path        # files to index for knowledge_search
@@ -66,7 +77,17 @@ def get_settings() -> Settings:
         ollama_base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
         ollama_num_ctx=min(int(os.getenv("OLLAMA_NUM_CTX", str(MAX_NUM_CTX))), MAX_NUM_CTX),
         request_timeout_s=float(os.getenv("LLM_TIMEOUT_S", "120")),
+        embed_provider=os.getenv("EMBED_PROVIDER", "ollama"),
         embed_model=os.getenv("EMBED_MODEL", "nomic-embed-text"),
+        google_api_key=os.getenv("GOOGLE_API_KEY", ""),
+        gemini_model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+        azure_openai_api_key=os.getenv("AZURE_OPENAI_API_KEY", ""),
+        azure_openai_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT", ""),
+        azure_openai_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", ""),
+        azure_openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-10-21"),
+        gcp_project=os.getenv("GOOGLE_CLOUD_PROJECT", ""),
+        # 1 GB per query. The BigQuery free tier is 1 TB/month, so this allows ~1,000 queries.
+        bigquery_max_bytes=int(os.getenv("BIGQUERY_MAX_BYTES", str(1_000_000_000))),
         data_dir=_path("DATA_DIR", PROJECT_ROOT / "data"),
         docs_dir=_path("DOCS_DIR", PROJECT_ROOT / "docs"),
         workspace_dir=_path("WORKSPACE_DIR", PROJECT_ROOT / "workspace"),
